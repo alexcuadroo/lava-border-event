@@ -1,0 +1,117 @@
+# Gradle
+.gradle/
+build/
+out/
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+*.classpath
+*.project
+.settings/
+.c9/
+*.sublime-workspace
+
+# Eclipse
+.metadata
+.classpath
+.project
+bin/
+tmp/
+*.tmp
+*.bak
+*.swp
+*~.nib
+local.properties
+.cproject
+.loadpath
+
+# IntelliJ
+*.iml
+.idea/
+out/
+*.swp
+*.swo
+*~
+
+# Netbeans
+nbproject/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+
+# OS
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Minecraft / NeoForge Dev
+run/
+.gradle/
+moddev/
+**/crash-reports/
+**/logs/
+**/coremods/
+**/mods/
+*.log
+*.log.*
+usernamecache.json
+usercache.json
+options.txt
+server.properties
+eula.txt
+banned-ips.txt
+banned-players.txt
+white-list.txt
+
+# Downloaded content
+gradle/wrapper/gradle-wrapper.jar
+
+# Build artifacts
+/build/
+/bin/
+/dist/
+/target/
+*.class
+*.jar
+*.war
+*.ear
+
+# Generated sources
+/src/generated/
+
+# Environment
+.env
+.env.local
+*.properties.local
+
+# Temporary files
+*.tmp
+~*
+.~*
+.swp
+.swo
+
+# Node modules (if applicable)
+node_modules/
+
+# Dependencies (gradle-managed)
+libs/
+
+# Run configs
+run/
