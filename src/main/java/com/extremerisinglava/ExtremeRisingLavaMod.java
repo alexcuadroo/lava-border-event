@@ -51,6 +51,13 @@ public class ExtremeRisingLavaMod {
 
         if (event.getEntity() instanceof ServerPlayer player) {
             if (player.level().dimension() == Level.OVERWORLD) {
+                if (event.getSource() != null && event.getSource().getEntity() instanceof ServerPlayer killer) {
+                    if (!killer.getUUID().equals(player.getUUID())) {
+                        EventManager.recordPvpKill(killer);
+                    }
+                }
+
+                EventManager.broadcastElimination(player.getServer(), player);
                 player.setGameMode(GameType.SPECTATOR);
                 player.sendSystemMessage(Component.empty()
                         .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
@@ -67,6 +74,8 @@ public class ExtremeRisingLavaMod {
                         .append(Component.literal("\n"))
                         .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
                                 .withStyle(style -> style.withColor(0xFF0000))));
+
+                EventManager.checkForWinner(player.getServer());
             }
         }
     }

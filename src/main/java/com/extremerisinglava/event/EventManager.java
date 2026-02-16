@@ -13,6 +13,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.border.WorldBorder;
 
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+
 public class EventManager {
     private static boolean running = false;
     private static boolean paused = false;
@@ -31,12 +35,183 @@ public class EventManager {
     private static double targetBorderSize = 0;
     private static long remainingBorderTimeMs = 0;
 
+    private static boolean initialBorderSaved = false;
+    private static double initialBorderCenterX = 0;
+    private static double initialBorderCenterZ = 0;
+    private static double initialBorderSize = 0;
+
+    private static final Map<UUID, Integer> killCounts = new HashMap<>();
+
     public static boolean isRunning() {
         return running;
     }
 
     public static boolean isPaused() {
         return paused;
+    }
+
+    public static long getElapsedTicks() {
+        return elapsedTicks;
+    }
+
+    public static long getTotalBorderTicks() {
+        return totalBorderTicks;
+    }
+
+    public static int getCurrentLavaY() {
+        return currentLavaY;
+    }
+
+    public static int getMaxLavaY() {
+        return maxLavaY;
+    }
+
+    public static long getNextLavaRaiseTick() {
+        return nextLavaRaiseTick;
+    }
+
+    public static int getLavaRaiseIntervalTicks() {
+        return lavaRaiseIntervalTicks;
+    }
+
+    public static long getPausedRemainingBorderTimeMs() {
+        return remainingBorderTimeMs;
+    }
+
+    public static int getKills(UUID playerId) {
+        return killCounts.getOrDefault(playerId, 0);
+    }
+
+    public static void recordPvpKill(ServerPlayer killer) {
+        if (killer == null) {
+            return;
+        }
+        UUID id = killer.getUUID();
+        killCounts.put(id, getKills(id) + 1);
+    }
+
+    public static String formatDurationTicks(long ticks) {
+        long totalSeconds = Math.max(0, ticks / 20);
+        long minutes = totalSeconds / 60;
+        long seconds = totalSeconds % 60;
+        if (minutes > 0) {
+            return minutes + "m " + seconds + "s";
+        }
+        return seconds + "s";
+    }
+
+    public static void broadcastElimination(MinecraftServer server, ServerPlayer eliminated) {
+        if (server == null || eliminated == null) {
+            return;
+        }
+
+        String duration = formatDurationTicks(elapsedTicks);
+        int kills = getKills(eliminated.getUUID());
+
+        Component message = Component.empty()
+                .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        .withStyle(style -> style.withColor(0xFF0000)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ☠ ").withStyle(style -> style.withColor(0xFF4444)))
+                .append(eliminated.getName().copy().withStyle(style -> style.withColor(0xFF5555).withBold(true)))
+                .append(Component.literal(" ").withStyle(style -> style.withColor(0xFF4444)))
+                .append(Component.literal("ELIMINADO").withStyle(style -> style.withColor(0xFF0000).withBold(true)))
+                .append(Component.literal(" ☠").withStyle(style -> style.withColor(0xFF4444)))
+                .append(Component.literal("\n\n"))
+                .append(Component.literal("  ⏱ Duró: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(duration).withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ⚔ Asesinatos: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(String.valueOf(kills))
+                        .withStyle(style -> style.withColor(0xFFD700).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        .withStyle(style -> style.withColor(0xFF0000)));
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(message);
+        }
+    }
+
+    public static void checkForWinner(MinecraftServer server) {
+        if (!running || server == null) {
+            return;
+        }
+
+        int aliveOverworld = 0;
+        int aliveOutsideOverworld = 0;
+        ServerPlayer lastAliveOverworld = null;
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (player.isSpectator() || player.isCreative()) {
+                continue;
+            }
+
+            if (player.level().dimension() == Level.OVERWORLD) {
+                aliveOverworld++;
+                lastAliveOverworld = player;
+            } else {
+                aliveOutsideOverworld++;
+            }
+        }
+
+        if (aliveOverworld > 1) {
+            return;
+        }
+
+        if (aliveOverworld == 0 && aliveOutsideOverworld > 0) {
+            return;
+        }
+
+        long durationTicks = elapsedTicks;
+        Component message;
+        if (aliveOverworld == 1 && aliveOutsideOverworld == 0 && lastAliveOverworld != null) {
+            String duration = formatDurationTicks(durationTicks);
+            int kills = getKills(lastAliveOverworld.getUUID());
+            message = Component.empty()
+                    .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            .withStyle(style -> style.withColor(0x00FF7F)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("  ✦ ").withStyle(style -> style.withColor(0x00FF7F)))
+                    .append(Component.literal("GANADOR").withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                    .append(Component.literal(" ✦").withStyle(style -> style.withColor(0x00FF7F)))
+                    .append(Component.literal("\n\n"))
+                    .append(Component.literal("  ").withStyle(style -> style.withColor(0xAAAAAA)))
+                    .append(lastAliveOverworld.getName().copy()
+                            .withStyle(style -> style.withColor(0xFFFFFF).withBold(true)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("  ⏱ Duración: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                    .append(Component.literal(duration).withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("  ⚔ Asesinatos: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                    .append(Component.literal(String.valueOf(kills))
+                            .withStyle(style -> style.withColor(0xFFD700).withBold(true)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            .withStyle(style -> style.withColor(0x00FF7F)));
+        } else {
+            if (aliveOverworld > 0 || aliveOutsideOverworld > 0) {
+                return;
+            }
+
+            message = Component.empty()
+                    .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            .withStyle(style -> style.withColor(0xFF0000)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("  ☠ ").withStyle(style -> style.withColor(0xFF4444)))
+                    .append(Component.literal("No hubo sobrevivientes")
+                            .withStyle(style -> style.withColor(0xFF0000).withBold(true)))
+                    .append(Component.literal(" ☠").withStyle(style -> style.withColor(0xFF4444)))
+                    .append(Component.literal("\n"))
+                    .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                            .withStyle(style -> style.withColor(0xFF0000)));
+        }
+
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(message);
+        }
+
+        stop(server);
     }
 
     public static void start(ServerLevel level) {
@@ -59,7 +234,17 @@ public class EventManager {
         paused = false;
         running = true;
 
+        killCounts.clear();
+
         WorldBorder worldBorder = level.getWorldBorder();
+
+        if (!initialBorderSaved) {
+            initialBorderCenterX = worldBorder.getCenterX();
+            initialBorderCenterZ = worldBorder.getCenterZ();
+            initialBorderSize = worldBorder.getSize();
+            initialBorderSaved = true;
+        }
+
         worldBorder.setCenter(0, 0);
         worldBorder.setSize(initialRadius * 2.0);
         worldBorder.lerpSizeBetween(initialRadius * 2.0, finalRadius * 2.0, closeTimeSeconds * 1000L);
@@ -98,8 +283,16 @@ public class EventManager {
         ServerLevel overworld = server.getLevel(Level.OVERWORLD);
         if (overworld != null) {
             WorldBorder worldBorder = overworld.getWorldBorder();
-            worldBorder.setSize(worldBorder.getSize());
+            if (initialBorderSaved) {
+                worldBorder.setCenter(initialBorderCenterX, initialBorderCenterZ);
+                worldBorder.setSize(initialBorderSize);
+                initialBorderSaved = false;
+            } else {
+                worldBorder.setSize(worldBorder.getSize());
+            }
         }
+
+        killCounts.clear();
 
         ExtremeRisingLavaMod.LOGGER.info("Extreme Rising Lava event stopped!");
     }
@@ -133,7 +326,12 @@ public class EventManager {
     }
 
     public static void tick(MinecraftServer server) {
-        if (!running || paused) {
+        if (!running) {
+            return;
+        }
+
+        if (paused) {
+            checkForWinner(server);
             return;
         }
 
@@ -152,6 +350,11 @@ public class EventManager {
 
         if (currentLavaY >= maxLavaY && elapsedTicks > totalBorderTicks) {
             stop(server);
+            return;
+        }
+
+        checkForWinner(server);
+        if (!running) {
             return;
         }
 

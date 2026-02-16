@@ -33,6 +33,8 @@ public class ModCommands {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("start")
                         .executes(ModCommands::startEvent))
+                .then(Commands.literal("status")
+                        .executes(ModCommands::statusEvent))
                 .then(Commands.literal("stop")
                         .executes(ModCommands::stopEvent))
                 .then(Commands.literal("pause")
@@ -67,6 +69,74 @@ public class ModCommands {
 
         EventManager.start(overworld);
         source.sendSuccess(() -> Component.literal("§a¡Evento final UruLand iniciado!"), true);
+        return 1;
+    }
+
+    private static int statusEvent(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+
+        if (!EventManager.isRunning()) {
+            source.sendSuccess(() -> Component.literal("§eNo hay ningún evento en ejecución."), false);
+            return 1;
+        }
+
+        ServerLevel overworld = source.getServer().getLevel(Level.OVERWORLD);
+        if (overworld == null) {
+            source.sendFailure(Component.literal("No se pudo obtener el Overworld!"));
+            return 0;
+        }
+
+        WorldBorder border = overworld.getWorldBorder();
+        int borderRadius = (int) (border.getSize() / 2.0);
+
+        long elapsed = EventManager.getElapsedTicks();
+        long totalBorder = EventManager.getTotalBorderTicks();
+        long remainingBorderTicks;
+        if (EventManager.isPaused()) {
+            remainingBorderTicks = Math.max(0, EventManager.getPausedRemainingBorderTimeMs() / 50);
+        } else {
+            remainingBorderTicks = Math.max(0, totalBorder - elapsed);
+        }
+
+        long nextRaise = EventManager.getNextLavaRaiseTick();
+        long nextRaiseInTicks = Math.max(0, nextRaise - elapsed);
+
+        Component msg = Component.empty()
+                .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        .withStyle(style -> style.withColor(0x00BFFF)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ✦ STATUS EVENTO ✦")
+                        .withStyle(style -> style.withColor(0x00BFFF).withBold(true)))
+                .append(Component.literal("\n\n"))
+                .append(Component.literal("  Estado: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(EventManager.isPaused() ? "PAUSADO" : "EN CURSO")
+                        .withStyle(
+                                style -> style.withColor(EventManager.isPaused() ? 0xFFD700 : 0x00FF7F).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ⏱ Tiempo: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(EventManager.formatDurationTicks(elapsed))
+                        .withStyle(style -> style.withColor(0xFFFFFF).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  🧱 Borde: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(borderRadius + "m")
+                        .withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ⌛ Cierre restante: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(EventManager.formatDurationTicks(remainingBorderTicks))
+                        .withStyle(style -> style.withColor(0xFFD700).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  🌋 Lava: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal("Y=" + EventManager.getCurrentLavaY() + " / " + EventManager.getMaxLavaY())
+                        .withStyle(style -> style.withColor(0xFF4500).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  ⏭ Próxima subida: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal(EventManager.formatDurationTicks(nextRaiseInTicks))
+                        .withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+                        .withStyle(style -> style.withColor(0x00BFFF)));
+
+        source.sendSuccess(() -> msg, false);
         return 1;
     }
 
