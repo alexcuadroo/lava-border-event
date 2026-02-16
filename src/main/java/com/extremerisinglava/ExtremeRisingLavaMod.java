@@ -33,7 +33,7 @@ public class ExtremeRisingLavaMod {
         NeoForge.EVENT_BUS.addListener(this::onServerTick);
         NeoForge.EVENT_BUS.addListener(this::onPlayerDeath);
 
-        LOGGER.info("Extreme Rising Lava mod initialized!");
+        LOGGER.info("Evento lava-borde UruLand iniciado!");
     }
 
     private void onRegisterCommands(RegisterCommandsEvent event) {

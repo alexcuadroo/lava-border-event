@@ -66,7 +66,7 @@ public class ModCommands {
         }
 
         EventManager.start(overworld);
-        source.sendSuccess(() -> Component.literal("§a¡Evento Extreme Rising Lava iniciado!"), true);
+        source.sendSuccess(() -> Component.literal("§a¡Evento final UruLand iniciado!"), true);
         return 1;
     }
 
@@ -79,7 +79,7 @@ public class ModCommands {
         }
 
         EventManager.stop(source.getServer());
-        source.sendSuccess(() -> Component.literal("§c¡Evento Extreme Rising Lava detenido!"), true);
+        source.sendSuccess(() -> Component.literal("§c¡Evento final UruLand detenido!"), true);
         return 1;
     }
 
