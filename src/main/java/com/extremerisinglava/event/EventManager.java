@@ -21,6 +21,14 @@ public class EventManager {
     private static boolean running = false;
     private static boolean paused = false;
 
+    private static double eventCenterX = 0;
+    private static double eventCenterZ = 0;
+
+    private static boolean soloMode = false;
+
+    private static boolean initialFireTickSaved = false;
+    private static boolean initialFireTickValue = true;
+
     private static long elapsedTicks = 0;
     private static long totalBorderTicks = 0;
 
@@ -76,6 +84,27 @@ public class EventManager {
 
     public static long getPausedRemainingBorderTimeMs() {
         return remainingBorderTimeMs;
+    }
+
+    public static double getEventCenterX() {
+        return eventCenterX;
+    }
+
+    public static double getEventCenterZ() {
+        return eventCenterZ;
+    }
+
+    public static void setEventCenter(double x, double z) {
+        eventCenterX = x;
+        eventCenterZ = z;
+    }
+
+    public static boolean isSoloMode() {
+        return soloMode;
+    }
+
+    public static void setSoloMode(boolean enabled) {
+        soloMode = enabled;
     }
 
     public static int getKills(UUID playerId) {
@@ -134,7 +163,7 @@ public class EventManager {
     }
 
     public static void checkForWinner(MinecraftServer server) {
-        if (!running || server == null) {
+        if (!running || server == null || soloMode) {
             return;
         }
 
@@ -245,7 +274,7 @@ public class EventManager {
             initialBorderSaved = true;
         }
 
-        worldBorder.setCenter(0, 0);
+        worldBorder.setCenter(eventCenterX, eventCenterZ);
         worldBorder.setSize(initialRadius * 2.0);
         worldBorder.lerpSizeBetween(initialRadius * 2.0, finalRadius * 2.0, closeTimeSeconds * 1000L);
 
@@ -262,6 +291,12 @@ public class EventManager {
         }
 
         fillLavaLayer(level, currentLavaY);
+
+        if (!initialFireTickSaved) {
+            initialFireTickValue = level.getGameRules().getBoolean(net.minecraft.world.level.GameRules.RULE_DOFIRETICK);
+            initialFireTickSaved = true;
+        }
+        level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK).set(false, level.getServer());
 
         ExtremeRisingLavaMod.LOGGER.info("Extreme Rising Lava event started!");
     }
@@ -293,6 +328,12 @@ public class EventManager {
         }
 
         killCounts.clear();
+
+        if (overworld != null && initialFireTickSaved) {
+            overworld.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_DOFIRETICK)
+                    .set(initialFireTickValue, server);
+            initialFireTickSaved = false;
+        }
 
         ExtremeRisingLavaMod.LOGGER.info("Extreme Rising Lava event stopped!");
     }
@@ -371,10 +412,12 @@ public class EventManager {
     private static void fillLavaLayer(ServerLevel level, int y) {
         int halfSize = ModConfig.LAVA_FILL_HALF_SIZE.get();
         BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        int centerBlockX = (int) Math.floor(eventCenterX);
+        int centerBlockZ = (int) Math.floor(eventCenterZ);
 
         for (int x = -halfSize; x < halfSize; x++) {
             for (int z = -halfSize; z < halfSize; z++) {
-                pos.set(x, y, z);
+                pos.set(centerBlockX + x, y, centerBlockZ + z);
 
                 if (!level.hasChunkAt(pos)) {
                     continue;

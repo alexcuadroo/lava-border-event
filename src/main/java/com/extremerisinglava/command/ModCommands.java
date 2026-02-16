@@ -3,6 +3,7 @@ package com.extremerisinglava.command;
 import com.extremerisinglava.config.ModConfig;
 import com.extremerisinglava.event.EventManager;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.DoubleArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -33,6 +34,10 @@ public class ModCommands {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("start")
                         .executes(ModCommands::startEvent))
+                .then(Commands.literal("setcenter")
+                        .then(Commands.argument("x", DoubleArgumentType.doubleArg())
+                                .then(Commands.argument("z", DoubleArgumentType.doubleArg())
+                                        .executes(ModCommands::setCenterEvent))))
                 .then(Commands.literal("status")
                         .executes(ModCommands::statusEvent))
                 .then(Commands.literal("stop")
@@ -50,7 +55,9 @@ public class ModCommands {
                         .then(Commands.argument("amount", IntegerArgumentType.integer(1, 100))
                                 .executes(ModCommands::spawnChests)))
                 .then(Commands.literal("supply")
-                        .executes(ModCommands::spawnSupplyDrop)));
+                        .executes(ModCommands::spawnSupplyDrop))
+                .then(Commands.literal("solo")
+                        .executes(ModCommands::toggleSoloMode)));
     }
 
     private static int startEvent(CommandContext<CommandSourceStack> context) {
@@ -69,6 +76,42 @@ public class ModCommands {
 
         EventManager.start(overworld);
         source.sendSuccess(() -> Component.literal("§a¡Evento final UruLand iniciado!"), true);
+        return 1;
+    }
+
+    private static int toggleSoloMode(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        boolean newState = !EventManager.isSoloMode();
+        EventManager.setSoloMode(newState);
+
+        if (newState) {
+            source.sendSuccess(
+                    () -> Component.literal("§a¡Modo solitario ACTIVADO! §7(victoria automática deshabilitada)"), true);
+        } else {
+            source.sendSuccess(
+                    () -> Component.literal("§c¡Modo solitario DESACTIVADO! §7(victoria automática habilitada)"), true);
+        }
+        return 1;
+    }
+
+    private static int setCenterEvent(CommandContext<CommandSourceStack> context) {
+        CommandSourceStack source = context.getSource();
+        double x = DoubleArgumentType.getDouble(context, "x");
+        double z = DoubleArgumentType.getDouble(context, "z");
+
+        EventManager.setEventCenter(x, z);
+
+        if (EventManager.isRunning()) {
+            ServerLevel overworld = source.getServer().getLevel(Level.OVERWORLD);
+            if (overworld != null) {
+                overworld.getWorldBorder().setCenter(x, z);
+            }
+        }
+
+        source.sendSuccess(
+                () -> Component.literal("§bCentro del evento actualizado: X=" + x + " Z=" + z
+                        + (EventManager.isRunning() ? " §7(aplicado ahora)" : " §7(se aplicará al iniciar)")),
+                true);
         return 1;
     }
 
@@ -120,6 +163,11 @@ public class ModCommands {
                 .append(Component.literal("  🧱 Borde: ").withStyle(style -> style.withColor(0xAAAAAA)))
                 .append(Component.literal(borderRadius + "m")
                         .withStyle(style -> style.withColor(0x00FF7F).withBold(true)))
+                .append(Component.literal("\n"))
+                .append(Component.literal("  📍 Centro: ").withStyle(style -> style.withColor(0xAAAAAA)))
+                .append(Component.literal("X=" + String.format("%.1f", EventManager.getEventCenterX())
+                        + " Z=" + String.format("%.1f", EventManager.getEventCenterZ()))
+                        .withStyle(style -> style.withColor(0x00BFFF).withBold(true)))
                 .append(Component.literal("\n"))
                 .append(Component.literal("  ⌛ Cierre restante: ").withStyle(style -> style.withColor(0xAAAAAA)))
                 .append(Component.literal(EventManager.formatDurationTicks(remainingBorderTicks))
@@ -304,10 +352,17 @@ public class ModCommands {
     }
 
     private static BlockPos findSafePosition(ServerLevel level, int radius) {
+        int centerX = (int) Math.floor(EventManager.getEventCenterX());
+        int centerZ = (int) Math.floor(EventManager.getEventCenterZ());
+
         for (int attempts = 0; attempts < 50; attempts++) {
-            int x = RANDOM.nextInt(radius * 2) - radius;
-            int z = RANDOM.nextInt(radius * 2) - radius;
+            int x = centerX + RANDOM.nextInt(radius * 2) - radius;
+            int z = centerZ + RANDOM.nextInt(radius * 2) - radius;
             int y = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+
+            if (y <= level.getMinY()) {
+                continue;
+            }
 
             BlockPos groundPos = new BlockPos(x, y - 1, z);
             BlockPos feetPos = new BlockPos(x, y, z);
@@ -343,14 +398,14 @@ public class ModCommands {
         int spawned = 0;
 
         for (int i = 0; i < amount; i++) {
-            int x = RANDOM.nextInt(radius * 2) - radius;
-            int z = RANDOM.nextInt(radius * 2) - radius;
-            int y = overworld.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+            BlockPos safePos = findSafePosition(overworld, radius);
+            if (safePos == null) {
+                continue;
+            }
 
-            BlockPos pos = new BlockPos(x, y, z);
-            overworld.setBlock(pos, Blocks.CHEST.defaultBlockState(), 3);
+            overworld.setBlock(safePos, Blocks.CHEST.defaultBlockState(), 3);
 
-            if (overworld.getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+            if (overworld.getBlockEntity(safePos) instanceof ChestBlockEntity chest) {
                 fillChestWithItems(chest, itemConfigs, false);
                 spawned++;
             }
@@ -375,14 +430,19 @@ public class ModCommands {
         if (radius < 10)
             radius = 10;
 
-        int x = RANDOM.nextInt(radius * 2) - radius;
-        int z = RANDOM.nextInt(radius * 2) - radius;
-        int y = overworld.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, x, z);
+        BlockPos safePos = findSafePosition(overworld, radius);
+        if (safePos == null) {
+            source.sendFailure(Component.literal("§cNo se encontró una posición segura para el supply drop."));
+            return 0;
+        }
 
-        BlockPos pos = new BlockPos(x, y, z);
-        overworld.setBlock(pos, Blocks.CHEST.defaultBlockState(), 3);
+        int x = safePos.getX();
+        int y = safePos.getY();
+        int z = safePos.getZ();
 
-        if (overworld.getBlockEntity(pos) instanceof ChestBlockEntity chest) {
+        overworld.setBlock(safePos, Blocks.CHEST.defaultBlockState(), 3);
+
+        if (overworld.getBlockEntity(safePos) instanceof ChestBlockEntity chest) {
             List<? extends String> itemConfigs = ModConfig.SUPPLY_ITEMS.get();
             fillChestWithItems(chest, itemConfigs, true);
         }
